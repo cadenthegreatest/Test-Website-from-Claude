@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Writing Desk</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;1,8..60,400&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          void:      '#14110F',
+          panel:     '#1B1714',
+          panelhi:   '#221D19',
+          page:      '#1E1A16',
+          line:      '#332C25',
+          brass:     '#C7A24A',
+        },
+        fontFamily: {
+          display: ['Fraunces', 'serif'],
+          serif:   ['"Source Serif 4"', 'serif'],
+          sans:    ['Inter', 'sans-serif'],
+          mono:    ['"JetBrains Mono"', 'monospace'],
+        }
+      }
+    }
+  }
+</script>
+
+<style>
+  :root{
+    --void:#14110F;
+    --panel:#1B1714;
+    --panel-hi:#221D19;
+    --page:#1E1A16;
+    --line:#332C25;
+    --brass:#C7A24A;
+    --brass-dim:#8A7333;
+    --brick:#A2534B;
+    --parchment:#ECE3D2;
+    --parchment-dim:#B8AE9C;
+    --muted:#7C7264;
+  }
+
+  html,body{ height:100%; background:var(--void); }
+  body{ font-family:'Inter',sans-serif; color:var(--parchment); overflow:hidden; }
+
+  ::selection{ background: rgba(199,162,74,0.35); color:#fff; }
+
+  /* thin, warm scrollbars */
+  ::-webkit-scrollbar{ width:8px; height:8px; }
+  ::-webkit-scrollbar-track{ background:transparent; }
+  ::-webkit-scrollbar-thumb{ background:var(--line); border-radius:8px; }
+  ::-webkit-scrollbar-thumb:hover{ background:var(--brass-dim); }
+
+  .spine{ border-left:3px solid var(--spine-color, var(--brass)); }
+
+  .font-display{ font-family:'Fraunces', serif; }
+  .font-serif{ font-family:'Source Serif 4', serif; }
+  .font-mono{ font-family:'JetBrains Mono', monospace; }
+
+  /* manuscript page grain */
+  .grain{
+    position:absolute; inset:0; pointer-events:none; opacity:0.05; mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  }
+
+  .manuscript{
+    font-family:'Source Serif 4', serif;
+    font-size:1.15rem;
+    line-height:1.9;
+    color:var(--parchment);
+  }
+  .manuscript:empty:before{
+    content: attr(data-placeholder);
+    color: var(--muted);
+    font-style: italic;
+  }
+  .manuscript p{ margin-bottom:1.1em; }
+  .manuscript:focus{ outline:none; }
+
+  .toolbtn{
+    color: var(--parchment-dim);
+    transition: color .15s ease, background .15s ease;
+  }
+  .toolbtn:hover{ color: var(--brass); background: rgba(199,162,74,0.08); }
+  .toolbtn.active{ color: var(--brass); background: rgba(199,162,74,0.12); }
+
+  .chapter-row{ transition: background .15s ease, border-color .15s ease; }
+  .chapter-row[data-active="true"]{ background: var(--panel-hi); border-color: var(--brass); }
+  .chapter-row.drag-over{ border-top: 2px solid var(--brass); }
+
+  .fade-saved{ animation: fadeSaved 1.6s ease forwards; }
+  @keyframes fadeSaved{
+    0%{ opacity:0; transform: translateY(2px); }
+    15%{ opacity:1; transform: translateY(0); }
+    75%{ opacity:1; }
+    100%{ opacity:0; }
+  }
+
+  .drawer-open .drawer{ transform: translateX(0); }
+  .drawer{ transition: transform .25s ease; }
+
+  input[type="text"].bare, textarea.bare{
+    background: transparent; border: none; outline: none; color: inherit;
+  }
+
+  .swatch{ width:1.15rem; height:1.15rem; border-radius:9999px; cursor:pointer; border:2px solid transparent; }
+  .swatch[data-selected="true"]{ border-color:#fff; }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+
+<body class="antialiased text-[15px]">
+
+<div id="app" class="h-screen w-screen flex overflow-hidden">
+
+  <!-- ============ MOBILE TOP BAR ============ -->
+  <div id="mobileBar" class="md:hidden fixed top-0 inset-x-0 h-14 bg-panel border-b border-line z-40 flex items-center px-3 gap-3">
+    <button id="mobileMenuBtn" class="p-2 text-parchment-dim hover:text-brass">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <span id="mobileTitle" class="font-display text-sm truncate text-parchment-dim">The Writing Desk</span>
+  </div>
+
+  <!-- ============ SIDEBAR: PROJECT SHELF ============ -->
+  <aside id="sidebar" class="drawer fixed md:static z-30 top-0 left-0 h-full w-64 bg-panel border-r border-line flex flex-col
+              -translate-x-full md:translate-x-0 pt-14 md:pt-0">
+    <div class="px-5 pt-6 pb-4 hidden md:block">
+      <h1 class="font-display text-xl tracking-tight text-parchment">The Writing Desk</h1>
+      <p class="text-xs text-muted mt-1 font-mono">your shelf of unfinished books</p>
+    </div>
+
+    <div class="px-4 flex items-center justify-between mt-2 md:mt-0">
+      <span class="text-[11px] uppercase tracking-widest text-muted font-mono">Projects</span>
+      <button id="newProjectBtn" class="text-brass hover:text-parchment text-sm w-6 h-6 flex items-center justify-center rounded hover:bg-panelhi" title="New project">+</button>
+    </div>
+
+    <div id="projectList" class="flex-1 overflow-y-auto px-3 mt-2 space-y-1 pb-4"></div>
+
+    <div id="projectEmptyState" class="hidden px-5 py-8 text-center">
+      <p class="text-sm text-muted leading-relaxed font-serif italic">The shelf is empty.<br>Start your first story.</p>
+    </div>
+
+    <div class="px-5 py-3 border-t border-line text-[11px] text-muted font-mono">saved locally in this browser</div>
+  </aside>
+
+  <!-- overlay for mobile drawer -->
+  <div id="drawerOverlay" class="fixed inset-0 bg-black/50 z-20 hidden md:hidden"></div>
+
+  <!-- ============ CHAPTER LIST (TABLE OF CONTENTS) ============ -->
+  <section id="chapterPane" class="hidden md:flex w-72 bg-void border-r border-line flex-col pt-0">
+    <div class="px-5 pt-6 pb-3 border-b border-line">
+      <div id="projectTitleWrap" class="flex items-start justify-between gap-2">
+        <h2 id="projectTitle" class="font-display text-lg text-parchment leading-snug break-words"></h2>
+      </div>
+      <p class="text-[11px] text-muted font-mono mt-1"><span id="chapterCountLabel">0</span> chapters &middot; <span id="projectWordTotal">0</span> words</p>
+    </div>
+
+    <div class="px-4 pt-3 flex items-center justify-between">
+      <span class="text-[11px] uppercase tracking-widest text-muted font-mono">Contents</span>
+      <button id="newChapterBtn" class="text-brass hover:text-parchment text-sm w-6 h-6 flex items-center justify-center rounded hover:bg-panelhi" title="New chapter">+</button>
+    </div>
+
+    <ol id="chapterList" class="flex-1 overflow-y-auto px-3 mt-2 space-y-1 pb-4"></ol>
+
+    <div id="chapterEmptyState" class="hidden px-5 py-10 text-center">
+      <p class="text-sm text-muted leading-relaxed font-serif italic">No chapters yet.<br>Write the first page.</p>
+    </div>
+  </section>
+
+  <!-- ============ MAIN: MANUSCRIPT EDITOR ============ -->
+  <main id="editorPane" class="flex-1 flex flex-col bg-void relative pt-14 md:pt-0">
+
+    <!-- Toolbar -->
+    <div id="toolbar" class="hidden border-b border-line bg-panel/40 px-4 md:px-8 h-12 items-center gap-1">
+      <button data-cmd="bold" class="toolbtn w-8 h-8 rounded font-semibold">B</button>
+      <button data-cmd="italic" class="toolbtn w-8 h-8 rounded italic font-serif">I</button>
+      <button data-cmd="underline" class="toolbtn w-8 h-8 rounded underline">U</button>
+      <span class="w-px h-5 bg-line mx-1"></span>
+      <button data-cmd="formatBlock" data-value="H2" class="toolbtn w-8 h-8 rounded font-display text-sm">H</button>
+      <button data-cmd="formatBlock" data-value="BLOCKQUOTE" class="toolbtn w-8 h-8 rounded text-lg leading-none">&rdquo;</button>
+      <span class="w-px h-5 bg-line mx-1"></span>
+      <button data-cmd="insertUnorderedList" class="toolbtn w-8 h-8 rounded text-sm">&bull;&ndash;</button>
+      <div class="flex-1"></div>
+      <span id="savedIndicator" class="text-[11px] font-mono text-brass opacity-0"></span>
+    </div>
+
+    <!-- Empty state (no project / no chapter selected) -->
+    <div id="editorEmptyState" class="flex-1 flex items-center justify-center px-8">
+      <div class="text-center max-w-sm">
+        <p class="font-display text-2xl text-parchment-dim mb-2">A blank page, waiting.</p>
+        <p class="text-sm text-muted font-serif leading-relaxed">Choose or start a project on the left, then add a chapter to begin writing.</p>
+      </div>
+    </div>
+
+    <!-- Manuscript page -->
+    <div id="editorScroll" class="hidden flex-1 overflow-y-auto">
+      <div class="max-w-[700px] mx-auto px-6 md:px-4 py-12 md:py-16 relative">
+        <div class="grain rounded-sm"></div>
+        <input id="chapterTitleInput" type="text" class="bare font-display text-2xl md:text-3xl text-parchment w-full mb-8 relative z-10" placeholder="Chapter title">
+        <div id="editor" class="manuscript relative z-10" contenteditable="true" data-placeholder="Begin here..."></div>
+      </div>
+    </div>
+
+    <!-- Status bar -->
+    <div id="statusBar" class="hidden border-t border-line px-4 md:px-8 h-10 items-center justify-between text-[11px] font-mono text-muted">
+      <span id="lastSavedLabel">&nbsp;</span>
+      <span><span id="wordCount">0</span> words &middot; <span id="charCount">0</span> characters</span>
+    </div>
+  </main>
+</div>
+
+<!-- ============ NEW PROJECT MODAL ============ -->
+<div id="projectModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-black/60 px-4">
+  <div class="bg-panel border border-line rounded-lg w-full max-w-sm p-6">
+    <h3 class="font-display text-lg text-parchment mb-4">New project</h3>
+    <input id="projectNameInput" type="text" placeholder="Working title&hellip;"
+      class="w-full bg-panelhi border border-line rounded px-3 py-2 text-sm text-parchment placeholder-muted outline-none focus:border-brass mb-4">
+    <p class="text-[11px] uppercase tracking-widest text-muted font-mono mb-2">Spine color</p>
+    <div id="colorSwatches" class="flex gap-2 mb-6"></div>
+    <div class="flex justify-end gap-2">
+      <button id="cancelProjectBtn" class="px-3 py-1.5 text-sm text-muted hover:text-parchment">Cancel</button>
+      <button id="confirmProjectBtn" class="px-3 py-1.5 text-sm bg-brass/90 hover:bg-brass text-void font-medium rounded">Create</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var STORAGE_KEY = "writingDesk.state.v1";
+  var SPINE_COLORS = ["#C7A24A", "#A2534B", "#5C7A6B", "#7A6BA2", "#4A8AC7", "#C77A4A"];
+
+  var state = null;
+  var saveTimer = null;
+
+  // ---------- persistence ----------
+  function loadState(){
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch(e){ console.warn("Could not read saved state", e); }
+    return { projects: [], activeProjectId: null, activeChapterId: null };
+  }
+
+  function persist(showIndicator){
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      if (showIndicator) flashSaved();
+    } catch(e){ console.warn("Could not save state", e); }
+  }
+
+  function scheduleSave(){
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function(){ persist(true); }, 450);
+  }
+
+  function flashSaved(){
+    var el = document.getElementById("savedIndicator");
+    var now = new Date();
+    el.textContent = "Saved " + now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    el.classList.remove("fade-saved");
+    void el.offsetWidth;
+    el.classList.add("fade-saved");
+    document.getElementById("lastSavedLabel").textContent = "Autosaved to this browser";
+  }
+
+  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+  // ---------- data helpers ----------
+  function getProject(id){
+    return state.projects.find(function(p){ return p.id === id; });
+  }
+  function getActiveProject(){ return getProject(state.activeProjectId); }
+  function getActiveChapter(){
+    var p = getActiveProject();
+    if (!p) return null;
+    return p.chapters.find(function(c){ return c.id === state.activeChapterId; }) || null;
+  }
+  function wordsIn(html){
+    var tmp = document.createElement("div");
+    tmp.innerHTML = html || "";
+    var text = tmp.textContent || "";
+    var m = text.trim().match(/\S+/g);
+    return m ? m.length : 0;
+  }
+  function charsIn(html){
+    var tmp = document.createElement("div");
+    tmp.innerHTML = html || "";
+    return (tmp.textContent || "").length;
+  }
+
+  // ---------- rendering: project shelf ----------
+  function renderProjects(){
+    var list = document.getElementById("projectList");
+    var empty = document.getElementById("projectEmptyState");
+    list.innerHTML = "";
+
+    if (state.projects.length === 0){
+      empty.classList.remove("hidden");
+    } else {
+      empty.classList.add("hidden");
+    }
+
+    state.projects.forEach(function(p){
+      var row = document.createElement("div");
+      row.className = "spine group flex items-center gap-2 rounded px-3 py-2 cursor-pointer hover:bg-panelhi";
+      row.style.setProperty("--spine-color", p.color);
+      if (p.id === state.activeProjectId) row.classList.add("bg-panelhi");
+
+      var nameSpan = document.createElement("span");
+      nameSpan.className = "flex-1 truncate text-sm font-display text-parchment";
+      nameSpan.textContent = p.name;
+
+      var delBtn = document.createElement("button");
+      delBtn.className = "opacity-0 group-hover:opacity-100 text-muted hover:text-brick text-xs";
+      delBtn.textContent = "✕";
+      delBtn.title = "Delete project";
+      delBtn.addEventListener("click", function(ev){
+        ev.stopPropagation();
+        if (confirm('Delete "' + p.name + '" and all its chapters? This cannot be undone.')){
+          deleteProject(p.id);
+        }
+      });
+
+      row.addEventListener("click", function(){ selectProject(p.id); });
+      row.appendChild(nameSpan);
+      row.appendChild(delBtn);
+      list.appendChild(row);
+    });
+  }
+
+  function selectProject(id){
+    state.activeProjectId = id;
+    var p = getProject(id);
+    state.activeChapterId = p && p.chapters.length ? p.chapters[0].id : null;
+    persist(false);
+    renderProjects();
+    renderChapterPane();
+    renderEditor();
+    closeMobileDrawer();
+  }
+
+  function deleteProject(id){
+    state.projects = state.projects.filter(function(p){ return p.id !== id; });
+    if (state.activeProjectId === id){
+      state.activeProjectId = state.projects.length ? state.projects[0].id : null;
+      var p = getActiveProject();
+      state.activeChapterId = p && p.chapters.length ? p.chapters[0].id : null;
+    }
+    persist(true);
+    renderProjects();
+    renderChapterPane();
+    renderEditor();
+  }
+
+  function addProject(name, color){
+    var p = { id: uid(), name: name || "Untitled Project", color: color || SPINE_COLORS[0], chapters: [] };
+    state.projects.push(p);
+    state.activeProjectId = p.id;
+    state.activeChapterId = null;
+    persist(true);
+    renderProjects();
+    renderChapterPane();
+    renderEditor();
+  }
+
+  // ---------- rendering: chapter list ----------
+  var dragIndex = null;
+
+  function renderChapterPane(){
+    var pane = document.getElementById("chapterPane");
+    var p = getActiveProject();
+
+    if (!p){
+      pane.classList.add("hidden");
+      document.getElementById("mobileTitle").textContent = "The Writing Desk";
+      return;
+    }
+    pane.classList.remove("md:hidden");
+    pane.classList.remove("hidden");
+    pane.classList.add("md:flex");
+
+    document.getElementById("projectTitle").textContent = p.name;
+    document.getElementById("mobileTitle").textContent = p.name;
+    document.getElementById("chapterCountLabel").textContent = p.chapters.length;
+
+    var totalWords = p.chapters.reduce(function(sum, c){ return sum + wordsIn(c.content); }, 0);
+    document.getElementById("projectWordTotal").textContent = totalWords.toLocaleString();
+
+    var list = document.getElementById("chapterList");
+    var empty = document.getElementById("chapterEmptyState");
+    list.innerHTML = "";
+
+    if (p.chapters.length === 0){
+      empty.classList.remove("hidden");
+    } else {
+      empty.classList.add("hidden");
+    }
+
+    p.chapters.forEach(function(c, idx){
+      var li = document.createElement("li");
+      li.className = "chapter-row group flex items-center gap-2 rounded px-2.5 py-2 cursor-pointer border border-transparent hover:bg-panelhi";
+      li.setAttribute("data-active", c.id === state.activeChapterId ? "true" : "false");
+      li.setAttribute("draggable", "true");
+      li.dataset.index = idx;
+
+      var num = document.createElement("span");
+      num.className = "text-[11px] font-mono text-brass-dim w-5 text-right shrink-0";
+      num.style.color = "var(--brass-dim)";
+      num.textContent = String(idx + 1).padStart(2, "0");
+
+      var titleSpan = document.createElement("span");
+      titleSpan.className = "flex-1 truncate text-[13.5px] font-serif " + (c.id === state.activeChapterId ? "text-parchment" : "text-parchment-dim");
+      titleSpan.textContent = c.title || "Untitled";
+
+      var wc = document.createElement("span");
+      wc.className = "text-[10px] font-mono text-muted shrink-0";
+      wc.textContent = wordsIn(c.content);
+
+      var delBtn = document.createElement("button");
+      delBtn.className = "opacity-0 group-hover:opacity-100 text-muted hover:text-brick text-xs shrink-0";
+      delBtn.textContent = "✕";
+      delBtn.title = "Delete chapter";
+      delBtn.addEventListener("click", function(ev){
+        ev.stopPropagation();
+        if (confirm('Delete "' + (c.title || "Untitled") + '"? This cannot be undone.')){
+          deleteChapter(c.id);
+        }
+      });
+
+      li.addEventListener("click", function(){ selectChapter(c.id); });
+
+      li.addEventListener("dragstart", function(ev){
+        dragIndex = idx;
+        ev.dataTransfer.effectAllowed = "move";
+      });
+      li.addEventListener("dragover", function(ev){
+        ev.preventDefault();
+        li.classList.add("drag-over");
+      });
+      li.addEventListener("dragleave", function(){ li.classList.remove("drag-over"); });
+      li.addEventListener("drop", function(ev){
+        ev.preventDefault();
+        li.classList.remove("drag-over");
+        if (dragIndex === null || dragIndex === idx) return;
+        reorderChapters(dragIndex, idx);
+        dragIndex = null;
+      });
+
+      li.appendChild(num);
+      li.appendChild(titleSpan);
+      li.appendChild(wc);
+      li.appendChild(delBtn);
+      list.appendChild(li);
+    });
+  }
+
+  function reorderChapters(fromIdx, toIdx){
+    var p = getActiveProject();
+    if (!p) return;
+    var arr = p.chapters;
+    var moved = arr.splice(fromIdx, 1)[0];
+    arr.splice(toIdx, 0, moved);
+    persist(true);
+    renderChapterPane();
+  }
+
+  function selectChapter(id){
+    state.activeChapterId = id;
+    persist(false);
+    renderChapterPane();
+    renderEditor();
+    closeMobileDrawer();
+  }
+
+  function deleteChapter(id){
+    var p = getActiveProject();
+    if (!p) return;
+    p.chapters = p.chapters.filter(function(c){ return c.id !== id; });
+    if (state.activeChapterId === id){
+      state.activeChapterId = p.chapters.length ? p.chapters[0].id : null;
+    }
+    persist(true);
+    renderChapterPane();
+    renderEditor();
+  }
+
+  function addChapter(){
+    var p = getActiveProject();
+    if (!p) return;
+    var c = { id: uid(), title: "Untitled Chapter " + (p.chapters.length + 1), content: "" };
+    p.chapters.push(c);
+    state.activeChapterId = c.id;
+    persist(true);
+    renderChapterPane();
+    renderEditor();
+    setTimeout(function(){
+      var input = document.getElementById("chapterTitleInput");
+      input.focus();
+      input.select();
+    }, 30);
+  }
+
+  // ---------- rendering: editor ----------
+  function renderEditor(){
+    var chapter = getActiveChapter();
+    var emptyState = document.getElementById("editorEmptyState");
+    var scroll = document.getElementById("editorScroll");
+    var toolbar = document.getElementById("toolbar");
+    var statusBar = document.getElementById("statusBar");
+
+    if (!chapter){
+      emptyState.classList.remove("hidden");
+      scroll.classList.add("hidden");
+      toolbar.classList.add("hidden");
+      toolbar.classList.remove("flex");
+      statusBar.classList.add("hidden");
+      statusBar.classList.remove("flex");
+      return;
+    }
+
+    emptyState.classList.add("hidden");
+    scroll.classList.remove("hidden");
+    toolbar.classList.remove("hidden");
+    toolbar.classList.add("flex");
+    statusBar.classList.remove("hidden");
+    statusBar.classList.add("flex");
+
+    var titleInput = document.getElementById("chapterTitleInput");
+    var editor = document.getElementById("editor");
+    titleInput.value = chapter.title;
+    editor.innerHTML = chapter.content || "";
+
+    updateCounts();
+  }
+
+  function updateCounts(){
+    var editor = document.getElementById("editor");
+    var html = editor.innerHTML;
+    document.getElementById("wordCount").textContent = wordsIn(html).toLocaleString();
+    document.getElementById("charCount").textContent = charsIn(html).toLocaleString();
+  }
+
+  // ---------- editor input handling ----------
+  function initEditorHandlers(){
+    var editor = document.getElementById("editor");
+    var titleInput = document.getElementById("chapterTitleInput");
+
+    editor.addEventListener("input", function(){
+      var chapter = getActiveChapter();
+      if (!chapter) return;
+      chapter.content = editor.innerHTML;
+      updateCounts();
+      renderChapterWordBadgeOnly();
+      scheduleSave();
+    });
+
+    titleInput.addEventListener("input", function(){
+      var chapter = getActiveChapter();
+      if (!chapter) return;
+      chapter.title = titleInput.value;
+      document.getElementById("mobileTitle").textContent = getActiveProject().name;
+      renderChapterPaneTitlesOnly();
+      scheduleSave();
+    });
+
+    document.querySelectorAll("#toolbar button[data-cmd]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var cmd = btn.getAttribute("data-cmd");
+        var val = btn.getAttribute("data-value") || null;
+        editor.focus();
+        document.execCommand(cmd, false, val);
+        var chapter = getActiveChapter();
+        if (chapter){
+          chapter.content = editor.innerHTML;
+          scheduleSave();
+        }
+      });
+    });
+  }
+
+  // lightweight re-renders that avoid full list rebuild flicker while typing
+  function renderChapterWordBadgeOnly(){
+    var p = getActiveProject();
+    if (!p) return;
+    var totalWords = p.chapters.reduce(function(sum, c){ return sum + wordsIn(c.content); }, 0);
+    document.getElementById("projectWordTotal").textContent = totalWords.toLocaleString();
+    var activeRow = document.querySelector('.chapter-row[data-active="true"]');
+    if (activeRow){
+      var wcBadge = activeRow.querySelector("span:nth-child(3)");
+      var chapter = getActiveChapter();
+      if (wcBadge && chapter) wcBadge.textContent = wordsIn(chapter.content);
+    }
+  }
+  function renderChapterPaneTitlesOnly(){
+    document.getElementById("projectTitle").textContent = getActiveProject() ? getActiveProject().name : "";
+    var chapter = getActiveChapter();
+    var activeRow = document.querySelector('.chapter-row[data-active="true"] span:nth-child(2)');
+    if (activeRow && chapter) activeRow.textContent = chapter.title || "Untitled";
+  }
+
+  // ---------- new project modal ----------
+  function initProjectModal(){
+    var modal = document.getElementById("projectModal");
+    var nameInput = document.getElementById("projectNameInput");
+    var swatchWrap = document.getElementById("colorSwatches");
+    var selectedColor = SPINE_COLORS[0];
+
+    SPINE_COLORS.forEach(function(color, i){
+      var sw = document.createElement("div");
+      sw.className = "swatch";
+      sw.style.background = color;
+      sw.dataset.selected = i === 0 ? "true" : "false";
+      sw.addEventListener("click", function(){
+        selectedColor = color;
+        swatchWrap.querySelectorAll(".swatch").forEach(function(s){ s.dataset.selected = "false"; });
+        sw.dataset.selected = "true";
+      });
+      swatchWrap.appendChild(sw);
+    });
+
+    function open(){
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+      nameInput.value = "";
+      selectedColor = SPINE_COLORS[0];
+      swatchWrap.querySelectorAll(".swatch").forEach(function(s, i){ s.dataset.selected = i === 0 ? "true" : "false"; });
+      setTimeout(function(){ nameInput.focus(); }, 30);
+    }
+    function close(){
+      modal.classList.add("hidden");
+      modal.classList.remove("flex");
+    }
+    function confirmCreate(){
+      var name = nameInput.value.trim();
+      if (!name) { nameInput.focus(); return; }
+      addProject(name, selectedColor);
+      close();
+    }
+
+    document.getElementById("newProjectBtn").addEventListener("click", open);
+    document.getElementById("cancelProjectBtn").addEventListener("click", close);
+    document.getElementById("confirmProjectBtn").addEventListener("click", confirmCreate);
+    modal.addEventListener("click", function(ev){ if (ev.target === modal) close(); });
+    nameInput.addEventListener("keydown", function(ev){ if (ev.key === "Enter") confirmCreate(); });
+  }
+
+  // ---------- mobile drawer ----------
+  function initMobileDrawer(){
+    var sidebar = document.getElementById("sidebar");
+    var overlay = document.getElementById("drawerOverlay");
+    var menuBtn = document.getElementById("mobileMenuBtn");
+
+    function open(){
+      sidebar.classList.remove("-translate-x-full");
+      overlay.classList.remove("hidden");
+    }
+    menuBtn.addEventListener("click", open);
+    overlay.addEventListener("click", closeMobileDrawer);
+  }
+  function closeMobileDrawer(){
+    var sidebar = document.getElementById("sidebar");
+    var overlay = document.getElementById("drawerOverlay");
+    if (window.innerWidth < 768){
+      sidebar.classList.add("-translate-x-full");
+      overlay.classList.add("hidden");
+    }
+  }
+
+  // ---------- init ----------
+  function init(){
+    state = loadState();
+    document.getElementById("newChapterBtn").addEventListener("click", addChapter);
+    initProjectModal();
+    initEditorHandlers();
+    initMobileDrawer();
+
+    renderProjects();
+    renderChapterPane();
+    renderEditor();
+
+    window.addEventListener("beforeunload", function(){ persist(false); });
+  }
+
+  document.addEventListener("DOMContentLoaded", init);
+})();
+</script>
+</body>
+</html>
